@@ -1,0 +1,42 @@
+name: Deploy to DigitalOcean Droplet
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # Set up environment variables
+            export GOOGLE_API_KEY='${{ secrets.GOOGLE_API_KEY }}'
+
+            # Navigate to project directory (or clone if it doesn't exist)
+            if [ ! -d "/var/www/agent_tracker" ]; then
+              git clone https://github.com/jurollo83/agent-tracker-app.git /var/www/agent_tracker
+            fi
+            cd /var/www/agent_tracker
+
+            # Pull the latest changes
+            git pull origin master
+
+            # Set up virtual environment and install packages
+            if [ ! -d "venv" ]; then
+              python3 -m venv venv
+            fi
+            source venv/bin/activate
+            pip install -r requirements.txt
+
+            # Run database migrations
+            python3 manage.py migrate
