@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block content %}
+    <nav><ul><li><a href="{% url 'agent-list' %}?{{ preserved_filters }}">&larr; Back to Dashboard</a></li></ul></nav>
+    <h1>{{ agent.agent_name }}</h1>
+    <div class="grid">
+        <a href="{% url 'generate-email' agent.mls_id %}" role="button" target="_blank">Generate Email</a>
+        {% if agent in user.favorite_agents.all %}
+            <a href="{% url 'remove-favorite' agent.mls_id %}" role="button" class="secondary outline">Remove from Favorites</a>
+        {% else %}
+            <a href="{% url 'add-favorite' agent.mls_id %}" role="button">Add to Favorites</a>
+        {% endif %}
+    </div>
+
+    {% if stats %}
+    <article>
+        <header><strong>Performance Snapshot (Last 12 Months)</strong></header>
+        <div class="grid">
+            <div><strong>Total Volume:</strong> ${{ stats.sales_volume_12mo|floatformat:0|intcomma }}</div>
+            <div><strong>Total Sides:</strong> {{ stats.sales_count_12mo }}</div>
+        </div>
+        <div class="grid">
+            <div><strong>Sell Sides:</strong> {{ stats.sell_side_count_12mo }}</div>
+            <div><strong>Buy Sides:</strong> {{ stats.buy_side_count_12mo }}</div>
+        </div>
+        <div class="grid">
+            <div><strong>Listing Success Rate:</strong> {{ stats.listing_success_rate|floatformat:1 }}%</div>
+            <div><strong>YoY Volume Change:</strong> {{ stats.yoy_volume_change|floatformat:1 }}%</div>
+        </div>
+        <footer><strong>Churn Risk Score: {{ stats.churn_risk_score }}</strong></footer>
+    </article>
+    {% endif %}
+    
+    <article>
+        <header><strong>12-Month Production Graph</strong></header>
+        <canvas id="salesChart"></canvas>
+    </article>
+
+    <h2>Transactions</h2>
+    <figure>
+        <table role="grid">
+            <thead>
+                <tr>
+                    <th>Date / Status</th>
+                    <th>Address</th>
+                    <th>Role</th>
+                    <th>Sale Price</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for listing in listings %}
+                    <tr>
+                        <td>
+                            {% if listing.status == 'SLD' and listing.settled_date %}
+                                {{ listing.settled_date }}
+                            {% else %}
+                                <span class="status-tag">{{ listing.get_status_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ listing.address }}</td>
+                        <td>
+                            {% if agent in listing.listing_agents.all and agent in listing.selling_agents.all %}
+                                <strong style="color: purple;">Double</strong>
+                            {% elif agent in listing.listing_agents.all %}
+                                <span style="color: blue;">Sell</span>
+                            {% elif agent in listing.selling_agents.all %}
+                                <span style="color: green;">Buy</span>
+                            {% endif %}
+                        </td>
+                        <td>${{ listing.sale_price|default:"N/A"|floatformat:0|intcomma }}</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="4">No transactions found.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </figure>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        const ctx = document.getElementById('salesChart');
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: {{ chart_labels|safe }},
+            datasets: [{
+              label: 'Monthly Sales Volume', data: {{ chart_volume_data|safe }}, yAxisID: 'yVolume', borderColor: 'rgb(0, 119, 255)'
+            }, {
+              label: 'Monthly Sides', data: {{ chart_sides_data|safe }}, yAxisID: 'ySides', borderColor: 'rgb(255, 159, 64)'
+            }]
+          },
+          options: {
+            scales: {
+              yVolume: { type: 'linear', display: true, position: 'left', ticks: { callback: value => '$' + value.toLocaleString() }},
+              ySides: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { stepSize: 1 } }
+            }
+          }
+        });
+    </script>
+{% endblock %}
